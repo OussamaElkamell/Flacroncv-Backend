@@ -49,80 +49,75 @@ router.post('/checkout', auth, async (req, res) => {
   try {
     const { plan } = req.body;
     const userId = req.user.id;
-    
+    const email = req.user.email;
+
+    // Validate plan
     if (!['basic', 'pro'].includes(plan)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid subscription plan'
       });
     }
-    
-    // Get user info from the request
-    const email = req.user.email;
 
-    // Check if user already has a Stripe customer ID
+    // Fetch user
     const user = await UserModel.findById(userId);
-    let stripeCustomerId = user?.stripeCustomerId;
-
-    if (!stripeCustomerId) {
-      // Create Stripe customer if not found
-      const customer = await stripe.customers.create({
-        email: email,
-        metadata: {
-          userId: userId
-        }
-      });
-      stripeCustomerId = customer.id;
-
-      // Save the stripeCustomerId to the user profile in DB
-      await UserModel.update(userId, {
-        stripeCustomerId: stripeCustomerId
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
       });
     }
-    
-    // Get the price ID for the plan
+
+    let stripeCustomerId = user.stripeCustomerId;
+
+    // Create Stripe customer if not exists
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email,
+        metadata: { userId }
+      });
+
+      stripeCustomerId = customer.id;
+
+      // Save new customer ID in DB immediately after creation
+      await UserModel.update(userId, { stripeCustomerId });
+    }
+
+    // Get Stripe price ID
     const priceId = PRODUCT_PRICES[plan];
-    
     if (!priceId) {
       return res.status(404).json({
         success: false,
         message: `Price ID not found for plan: ${plan}`
       });
     }
-    
-    // Create checkout session with the price ID directly
+
+    // Create checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       customer: stripeCustomerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1
-        }
-      ],
-      mode: 'subscription', // For subscription
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: 'subscription',
       success_url: `${process.env.CLIENT_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.CLIENT_URL}/payment/cancel`,
-      metadata: {
-        userId: userId,
-        plan: plan
-      }
+      metadata: { userId, plan }
     });
-    
+
     res.json({
       success: true,
-      data: {
-        url: session.url
-      }
+      data: { url: session.url }
     });
+
   } catch (error) {
-    console.error('Stripe checkout error:', error);
+    console.error('Stripe checkout error:', error.message, error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to create checkout session'
     });
   }
 });
+
+
 
 // POST /api/payment/webhook
 router.post('/webhook', async (req, res) => {

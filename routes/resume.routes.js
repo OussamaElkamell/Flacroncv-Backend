@@ -57,8 +57,10 @@ router.post('/enhance', auth, async (req, res) => {
     const { resumeData } = req.body;
     const userId = req.user.id;
     
+    
     // Check user's subscription
     const user = await UserModel.findById(userId);
+    console.log("user subscription",user.subscription.plan);
     const hasPro = user && user.subscription.plan === 'pro';
     
     if (!hasPro) {

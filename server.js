@@ -29,7 +29,7 @@ const corsOptions = {
 };
 
 // Middleware
-
+app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(fileUpload());
 // Add the raw body parser for Stripe webhook before json parser

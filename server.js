@@ -50,6 +50,8 @@ app.use('/api/resume', resumeRoutes);
 app.use('/api/cover-letter', coverLetterRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api', pdfRoutes);
+
 // Endpoint to convert image to CMYK PDF
 
 // Error handling middleware
@@ -62,9 +64,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// // Start the server
-// app.listen(PORT, () => {
-//   console.log(`Server running on port ${PORT}`);
-//   console.log(`API URL: http://localhost:${PORT}/api`);
-// });
-module.exports = app;
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`API URL: http://localhost:${PORT}/api`);
+});
+

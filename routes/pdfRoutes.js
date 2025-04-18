@@ -13,7 +13,7 @@ router.post('/convert-to-cmyk-pdf', async (req, res) => {
     }
 
     const image = req.files.image;
-    const uploadDir = path.join(__dirname, '../tmp');
+    const uploadDir = '/tmp';
     const inputPath = path.join(uploadDir, image.name);
     const cmykImagePath = path.join(uploadDir, `cmyk-${Date.now()}.png`);
 

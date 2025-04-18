@@ -1,23 +1,20 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/convert-to-cmyk-pdf.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "server.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/convert-to-cmyk-pdf",
-      "dest": "/api/convert-to-cmyk-pdf.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "server.js"
-    }
-  ]
-}
+    "version": 2,
+    "builds": [
+      {
+        "src": "server.js",
+        "use": "@vercel/node"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/(.*)",
+        "headers": {
+          "Cross-Origin-Opener-Policy": "same-origin",
+          "Cross-Origin-Embedder-Policy": "require-corp"
+        },
+        "dest": "server.js"
+      }
+    ]
+  }
+  

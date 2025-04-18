@@ -2,60 +2,65 @@ import { PDFDocument } from 'pdf-lib';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
+import { IncomingForm } from 'formidable';
 
-// Vercel serverless function handler
+export const config = {
+  api: {
+    bodyParser: false, // Important: disables default body parsing
+  },
+};
+
 export default async function handler(req, res) {
-  if (req.method === 'POST') {
+  if (req.method !== 'POST') {
+    return res.status(405).send('Method Not Allowed');
+  }
+
+  const form = new IncomingForm({ uploadDir: '/tmp', keepExtensions: true });
+
+  form.parse(req, async (err, fields, files) => {
+    if (err || !files.image) {
+      console.error('Form parsing error or no file:', err);
+      return res.status(400).send('Invalid image upload');
+    }
+
     try {
-      if (!req.body || !req.body.files || !req.body.files.image) {
-        return res.status(400).send('No image file uploaded.');
-      }
+      const uploadedPath = files.image[0]?.filepath || files.image.filepath || files.image.path;
+      const cmykImagePath = path.join('/tmp', `cmyk-${Date.now()}.png`);
 
-      const image = req.body.files.image;
-      const uploadDir = path.join('/tmp', 'uploads'); // Use '/tmp' for Vercel's serverless temp storage
-      const inputPath = path.join(uploadDir, image.name);
-      const cmykImagePath = path.join(uploadDir, 'cmyk_image.png');
-
-      // Ensure upload directory exists
-      fs.mkdirSync(uploadDir, { recursive: true });
-
-      // Save uploaded image to temp directory
-      fs.writeFileSync(inputPath, Buffer.from(image.data, 'base64'));
-
-      // Convert the image to CMYK using sharp
-      await sharp(inputPath)
+      // Convert image to CMYK
+      await sharp(uploadedPath)
         .withMetadata()
-        .toColourspace('cmyk') // Convert to CMYK color space
+        .toColourspace('cmyk')
         .toFile(cmykImagePath);
 
-      // Generate PDF using pdf-lib
+      // Create PDF
       const pdfDoc = await PDFDocument.create();
       const pngBytes = fs.readFileSync(cmykImagePath);
       const pngImage = await pdfDoc.embedPng(pngBytes);
-      const { width, height } = pngImage.scaleToFit(595.28, 841.89); // A4 paper size
+      const { width, height } = pngImage.scaleToFit(595.28, 841.89); // A4
+
       const page = pdfDoc.addPage([595.28, 841.89]);
       page.drawImage(pngImage, {
         x: 0,
-        y: 841.89 - height, // Align image to the bottom of the page
+        y: 841.89 - height,
         width,
         height,
       });
+
       const pdfBytes = await pdfDoc.save();
 
-      // Return the generated PDF as a response
+      // Send PDF response
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'attachment; filename=output-cmyk.pdf');
       res.status(200).end(Buffer.from(pdfBytes));
 
-      // Cleanup: Delete the uploaded and converted image files
-      fs.unlinkSync(inputPath);
+      // Cleanup
+      fs.unlinkSync(uploadedPath);
       fs.unlinkSync(cmykImagePath);
 
-    } catch (err) {
-      console.error('Error in CMYK PDF generation:', err);
-      res.status(500).send('Error generating CMYK-style PDF');
+    } catch (error) {
+      console.error('Processing error:', error);
+      res.status(500).send('Failed to process image and generate PDF.');
     }
-  } else {
-    res.status(405).send('Method Not Allowed');
-  }
+  });
 }

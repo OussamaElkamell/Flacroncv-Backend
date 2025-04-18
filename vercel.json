@@ -8,12 +8,21 @@
   ],
   "routes": [
     {
+      "src": "/api/convert-to-cmyk-pdf",
+      "methods": ["POST"],
+      "headers": {
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp"
+      },
+      "dest": "/server.js"
+    },
+    {
       "src": "/(.*)",
       "headers": {
         "Cross-Origin-Opener-Policy": "same-origin",
         "Cross-Origin-Embedder-Policy": "require-corp"
       },
-      "dest": "server.js"
+      "dest": "/server.js"
     }
   ]
 }

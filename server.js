@@ -51,57 +51,7 @@ app.use('/api/cover-letter', coverLetterRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 // Endpoint to convert image to CMYK PDF
-app.post('/api/convert-to-cmyk-pdf', async (req, res) => {
-  try {
-    if (!req.files || !req.files.image) {
-      return res.status(400).send('No image file uploaded.');
-    }
 
-    const image = req.files.image;
-    const uploadDir = path.join(__dirname, 'uploads');
-    const inputPath = path.join(uploadDir, image.name);
-    const cmykImagePath = path.join(uploadDir, 'cmyk_image.png');
-
-    // Save uploaded image
-    fs.writeFileSync(inputPath, image.data);
-
-    // Convert image to CMYK using ICC profile
-    await sharp(inputPath)
-      .withMetadata()
-      .toColourspace('cmyk') // sharp supports this
-      .toFile(cmykImagePath);
-
-    // Generate PDF using pdf-lib
-    const pdfDoc = await PDFDocument.create();
-    const pngBytes = fs.readFileSync(cmykImagePath);
-    const pngImage = await pdfDoc.embedPng(pngBytes);
-    const { width, height } = pngImage.scaleToFit(595.28, 841.89);
-    const page = pdfDoc.addPage([595.28, 841.89]);
-    page.drawImage(pngImage, {
-      x: 0,
-      y: 841.89 - height,
-      width,
-      height,
-    });
-    const pdfBytes = await pdfDoc.save();
-
-    // Return PDF
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': 'attachment; filename=output-cmyk.pdf',
-      'Content-Length': pdfBytes.length, // 💡 VERY important for binary download
-    });
-    res.status(200).end(Buffer.from(pdfBytes)); // instead of res.send()
-    
-
-    // Cleanup
-    fs.unlinkSync(inputPath);
-    fs.unlinkSync(cmykImagePath);
-  } catch (err) {
-    console.error('Error in CMYK PDF generation:', err);
-    res.status(500).send('Error generating CMYK-style PDF');
-  }
-});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

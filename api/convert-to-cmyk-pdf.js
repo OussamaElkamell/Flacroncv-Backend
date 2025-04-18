@@ -1,56 +1,59 @@
-import formidable from 'formidable';
-import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
+import sharp from 'sharp';
+import fs from 'fs';
+import path from 'path';
+import nextConnect from 'next-connect';
+import multer from 'multer';
 
-export const config = {
-  api: {
-    bodyParser: false,  // Disable body parsing, as we need to parse the form manually
-  },
-};
+const upload = multer({ dest: '/tmp/uploads/' }); // Using a temporary directory for file upload
 
-export default async (req, res) => {
-  console.log("Request received");
+const handler = nextConnect();
 
-  const form = new formidable.Form();  // Corrected: Use `new formidable.Form()`
+// Middleware to handle file upload
+handler.use(upload.single('image'));  // Handle a single file upload with the field name 'image'
 
-  // Parse the form data (handling file upload)
-  form.parse(req, async (err, fields, files) => {
-    if (err) {
-      console.log("Error parsing form:", err);
-      return res.status(500).send('Error parsing file');
+handler.post(async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).send('No image file uploaded.');
     }
 
-    console.log("Form parsed successfully");
-    const uploadedFile = files.image ? files.image[0] : null;  // Check the uploaded file
-    if (!uploadedFile) {
-      console.log("No file uploaded");
-      return res.status(400).send('No file uploaded');
-    }
+    const uploadedImagePath = req.file.path;  // Path to the uploaded image
+    const uploadDir = path.join('/tmp/uploads'); // Temporary upload directory
+    const cmykImagePath = path.join(uploadDir, 'cmyk_image.png');
 
-    try {
-      console.log("Converting image to CMYK");
-      // Convert the image to CMYK using sharp
-      const cmykBuffer = await sharp(uploadedFile.filepath)
-        .withMetadata()
-        .toColourspace('cmyk')
-        .toBuffer();
+    // Convert image to CMYK using sharp
+    await sharp(uploadedImagePath)
+      .withMetadata()
+      .toColourspace('cmyk') // sharp supports this for CMYK conversion
+      .toFile(cmykImagePath);
 
-      console.log("CMYK conversion complete");
+    // Generate PDF using pdf-lib
+    const pdfDoc = await PDFDocument.create();
+    const pngBytes = fs.readFileSync(cmykImagePath);
+    const pngImage = await pdfDoc.embedPng(pngBytes);
+    const { width, height } = pngImage.scaleToFit(595.28, 841.89); // Size for A4 paper
+    const page = pdfDoc.addPage([595.28, 841.89]);
+    page.drawImage(pngImage, {
+      x: 0,
+      y: 841.89 - height, // Align the image to the bottom of the page
+      width,
+      height,
+    });
+    const pdfBytes = await pdfDoc.save();
 
-      // Create PDF and embed the image
-      const pdfDoc = await PDFDocument.create();
-      const pngImage = await pdfDoc.embedPng(cmykBuffer);
-      const { width, height } = pngImage.scaleToFit(595.28, 841.89);
-      const page = pdfDoc.addPage([595.28, 841.89]);
-      page.drawImage(pngImage, { x: 0, y: 841.89 - height, width, height });
+    // Return the generated PDF as a response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=output-cmyk.pdf');
+    res.status(200).end(Buffer.from(pdfBytes));
 
-      const pdfBytes = await pdfDoc.save();
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename=output-cmyk.pdf');
-      return res.status(200).send(Buffer.from(pdfBytes));
-    } catch (error) {
-      console.log("Error in CMYK PDF generation:", error);
-      return res.status(500).send('Error generating CMYK PDF');
-    }
-  });
-};
+    // Cleanup: Delete the uploaded and converted image files
+    fs.unlinkSync(uploadedImagePath);
+    fs.unlinkSync(cmykImagePath);
+  } catch (err) {
+    console.error('Error in CMYK PDF generation:', err);
+    res.status(500).send('Error generating CMYK-style PDF');
+  }
+});
+
+export default handler;

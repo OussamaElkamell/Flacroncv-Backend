@@ -2,58 +2,51 @@ import formidable from 'formidable';
 import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
 
-// Configure formidable to handle file uploads
-const form = new formidable.IncomingForm();
-form.uploadDir = './uploads'; // Temporary directory
-form.keepExtensions = true;
-
-// This will process the file and convert it to a CMYK PDF
 export const config = {
   api: {
-    bodyParser: false, // Disable default body parsing as we are using formidable
+    bodyParser: false,
   },
 };
 
 export default async (req, res) => {
+  console.log("Request received");  // Debugging line
+  const form = new formidable.IncomingForm();
+
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error('File upload error:', err);
-      return res.status(500).send('Error processing file.');
+      console.log("Error parsing form:", err);  // Debugging line
+      return res.status(500).send('Error parsing file');
+    }
+
+    console.log("Form parsed successfully");  // Debugging line
+    const uploadedFile = files.image ? files.image[0] : null;
+    if (!uploadedFile) {
+      console.log("No file uploaded");  // Debugging line
+      return res.status(400).send('No file uploaded');
     }
 
     try {
-      if (!files.image) {
-        return res.status(400).send('No image file uploaded.');
-      }
-
-      const uploadedImage = files.image[0];
-      
-      // Convert the image to CMYK using sharp
-      const cmykImageBuffer = await sharp(uploadedImage.filepath)
+      console.log("Converting image to CMYK");  // Debugging line
+      const cmykBuffer = await sharp(uploadedFile.filepath)
         .withMetadata()
-        .toColourspace('cmyk') // sharp supports this
+        .toColourspace('cmyk')
         .toBuffer();
 
-      // Generate PDF using pdf-lib
+      console.log("CMYK conversion complete");  // Debugging line
+
       const pdfDoc = await PDFDocument.create();
-      const pngImage = await pdfDoc.embedPng(cmykImageBuffer);
+      const pngImage = await pdfDoc.embedPng(cmykBuffer);
       const { width, height } = pngImage.scaleToFit(595.28, 841.89);
       const page = pdfDoc.addPage([595.28, 841.89]);
-      page.drawImage(pngImage, {
-        x: 0,
-        y: 841.89 - height,
-        width,
-        height,
-      });
-      const pdfBytes = await pdfDoc.save();
+      page.drawImage(pngImage, { x: 0, y: 841.89 - height, width, height });
 
-      // Send the PDF response
+      const pdfBytes = await pdfDoc.save();
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'attachment; filename=output-cmyk.pdf');
-      res.status(200).send(Buffer.from(pdfBytes)); // Send the PDF content as response
+      return res.status(200).send(Buffer.from(pdfBytes));
     } catch (error) {
-      console.error('Error generating CMYK PDF:', error);
-      res.status(500).send('Error generating CMYK-style PDF');
+      console.log("Error in CMYK PDF generation:", error);  // Debugging line
+      return res.status(500).send('Error generating CMYK PDF');
     }
   });
 };

@@ -63,8 +63,7 @@ router.post('/logout', auth, (req, res) => {
 // GET /api/auth/user
 router.get('/user', auth, async (req, res) => {
   try {
-    // Return user info from JWT token (set in auth middleware)
-    // We could fetch additional user data from Firebase here if needed
+
     res.json({
       success: true,
       data: {
